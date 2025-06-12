@@ -528,101 +528,88 @@ export async function fetchContractTransactions(
   filterType?: TransactionType,
 ): Promise<ContractTransaction[]> {
   try {
-    console.log(`Starting fetchContractTransactions with limit ${limit} and filter ${filterType}`)
+    console.log(
+      `Starting fetchContractTransactions with limit ${limit} and filter ${filterType}`,
+    )
 
     // Get the latest block number
     const latestBlock = await client.getBlockNumber()
 
-    // Fetch the last 500 blocks for initial load
+    // Only scan the last 500 blocks
     const fromBlock = latestBlock - 500n
-    const toBlock = latestBlock
 
-    console.log(`Fetching initial contract transactions from block ${fromBlock} to ${toBlock}`)
+    console.log(`Fetching logs from block ${fromBlock} to ${latestBlock}`)
+
+    // Currently only TokenCreated events emit logs, so other filters will return nothing
+    const logs = await client.getLogs({
+      address: ARENA_CONTRACT_ADDRESS,
+      event: TOKEN_CREATED_EVENT,
+      fromBlock,
+      toBlock: latestBlock,
+    })
+
+    console.log(`Received ${logs.length} logs`)
 
     const transactions: ContractTransaction[] = []
 
-    // Fetch blocks in smaller chunks
-    const chunkSize = 50n
-    for (let i = fromBlock; i <= toBlock; i += chunkSize) {
-      const endBlock = i + chunkSize - 1n > toBlock ? toBlock : i + chunkSize - 1n
-
+    for (const log of logs) {
       try {
-        // Get blocks with full transaction details
-        const blocks = await Promise.all(
-          Array.from({ length: Number(endBlock - i + 1n) }, (_, index) =>
-            client.getBlock({ blockNumber: i + BigInt(index), includeTransactions: true }),
-          ),
-        )
+        const tx = await client.getTransaction({ hash: log.transactionHash })
+        const block = await client.getBlock({ blockNumber: log.blockNumber })
 
-        for (const block of blocks) {
-          if (!block.transactions) continue
+        const methodId = tx.input.slice(0, 10)
+        const transactionInfo = determineTransactionType(methodId, tx.value.toString())
 
-          for (const tx of block.transactions) {
-            // Check if transaction is to our contract
-            if (typeof tx === "object" && tx.to?.toLowerCase() === ARENA_CONTRACT_ADDRESS.toLowerCase()) {
-              const methodId = tx.input.slice(0, 10)
-              const transactionInfo = determineTransactionType(methodId, tx.value.toString())
+        if (filterType && transactionInfo.type !== filterType) continue
 
-              // Skip if we're filtering and this doesn't match
-              if (filterType && transactionInfo.type !== filterType) {
-                continue
-              }
+        let tokenMetadata: TokenMetadata | null = null
+        if (transactionInfo.type === "TOKEN_CREATION") {
+          tokenMetadata = decodeTokenCreationData(methodId, tx.input)
 
-              // Decode token metadata if it's a token creation
-              let tokenMetadata: TokenMetadata | null = null
-              if (transactionInfo.type === "TOKEN_CREATION") {
-                tokenMetadata = decodeTokenCreationData(methodId, tx.input)
+          const tokenAddress = (log.args as any)?.params?.tokenContractAddress as string | undefined
+          if (tokenAddress) {
+            if (!tokenMetadata) tokenMetadata = { tokenAddress }
+            else tokenMetadata.tokenAddress = tokenAddress
+          }
 
-                // Als we geen token address hebben in de metadata, probeer het uit de events te halen
-                if (!tokenMetadata?.tokenAddress) {
-                  const tokenAddress = await extractTokenAddressFromTransaction(tx.hash)
-                  if (tokenAddress) {
-                    if (!tokenMetadata) {
-                      tokenMetadata = { tokenAddress }
-                    } else {
-                      tokenMetadata.tokenAddress = tokenAddress
-                    }
-                  }
-                }
-              }
-
-              const contractTx: ContractTransaction = {
-                hash: tx.hash,
-                from: tx.from,
-                to: tx.to,
-                value: tx.value.toString(),
-                blockNumber: block.number!,
-                timestamp: Number(block.timestamp) * 1000,
-                method: transactionInfo.method,
-                methodId,
-                transactionType: transactionInfo.type,
-                isTokenCreation: transactionInfo.type === "TOKEN_CREATION",
-                description: transactionInfo.description,
-                tokenMetadata,
-                rawInput: tx.input,
-              }
-
-              if (transactionInfo.type === "TOKEN_CREATION") {
-                contractTx.tokenAddress = await extractTokenAddressFromTransaction(tx.hash)
-              }
-
-              transactions.push(contractTx)
+          if (!tokenMetadata?.tokenAddress) {
+            const addr = await extractTokenAddressFromTransaction(tx.hash)
+            if (addr) {
+              if (!tokenMetadata) tokenMetadata = { tokenAddress: addr }
+              else tokenMetadata.tokenAddress = addr
             }
           }
         }
 
-        // Small delay between chunks
-        if (i + chunkSize <= toBlock) {
-          await new Promise((resolve) => setTimeout(resolve, 100))
+        const contractTx: ContractTransaction = {
+          hash: tx.hash,
+          from: tx.from,
+          to: tx.to,
+          value: tx.value.toString(),
+          blockNumber: tx.blockNumber!,
+          timestamp: Number(block.timestamp) * 1000,
+          method: transactionInfo.method,
+          methodId,
+          transactionType: transactionInfo.type,
+          isTokenCreation: transactionInfo.type === "TOKEN_CREATION",
+          description: transactionInfo.description,
+          tokenMetadata,
+          rawInput: tx.input,
         }
-      } catch (error) {
-        console.error(`Error fetching blocks ${i} to ${endBlock}:`, error)
-        continue
+
+        if (transactionInfo.type === "TOKEN_CREATION" && tokenMetadata?.tokenAddress) {
+          contractTx.tokenAddress = tokenMetadata.tokenAddress
+        }
+
+        transactions.push(contractTx)
+      } catch (err) {
+        console.error("Error processing log", err)
       }
     }
 
-    // Sort by block number (newest first) and limit results
-    const sortedTransactions = transactions.sort((a, b) => Number(b.blockNumber - a.blockNumber)).slice(0, limit)
+    const sortedTransactions = transactions
+      .sort((a, b) => Number(b.blockNumber - a.blockNumber))
+      .slice(0, limit)
 
     console.log(`Found ${sortedTransactions.length} transactions matching filter`)
 
