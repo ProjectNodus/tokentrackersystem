@@ -126,6 +126,8 @@ export async function saveContractTransaction(
       token_id: tokenId || null,
       creator_profile_id: creatorProfileId || null,
       raw_input: transaction.rawInput || null,
+      posted_to_arena: false,
+      posted_to_discord: false,
     }
 
     const { data, error } = await supabase

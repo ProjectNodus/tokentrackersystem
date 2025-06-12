@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS contract_transactions (
   token_id UUID REFERENCES tokens(id),
   creator_profile_id UUID REFERENCES creator_profiles(id),
   raw_input TEXT,
+  posted_to_arena BOOLEAN DEFAULT FALSE,
+  posted_to_discord BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

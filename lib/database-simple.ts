@@ -2,6 +2,7 @@ import { supabase } from "./supabase"
 import type { ContractTransaction } from "./blockchain"
 import { fetchArenaUserProfile, postToArenaTimeline } from "./arena-socials"
 import { postToDiscordWithRetry } from "./discord-socials"
+import { saveContractTransaction } from "./database"
 
 export interface Creator {
   id: string
@@ -213,9 +214,30 @@ export async function processTokenCreation(transaction: ContractTransaction): Pr
     const arenaPostKey = createArenaPostCacheKey(transaction.hash, transaction.from, symbol)
     const discordPostKey = createDiscordPostCacheKey(transaction.hash, transaction.from, symbol)
 
-    // Check if we already processed posts for this exact transaction
-    const arenaAlreadySent = wasArenaPostAlreadySent(arenaPostKey)
-    const discordAlreadySent = wasDiscordPostAlreadySent(discordPostKey)
+    // Check database for existing post status
+    let arenaAlreadySent = false
+    let discordAlreadySent = false
+    let transactionId: string | null = null
+    const { data: txData, error: txError } = await supabase
+      .from("contract_transactions")
+      .select("id, posted_to_arena, posted_to_discord")
+      .eq("hash", transaction.hash)
+      .single()
+
+    if (txError && txError.code !== "PGRST116") {
+      console.error("❌ Error fetching transaction status:", txError)
+    }
+
+    if (txData) {
+      transactionId = txData.id
+      arenaAlreadySent = txData.posted_to_arena ?? false
+      discordAlreadySent = txData.posted_to_discord ?? false
+
+      if (arenaAlreadySent) markArenaPostAsSent(arenaPostKey, "db")
+      if (discordAlreadySent) markDiscordPostAsSent(discordPostKey, "db")
+    } else {
+      transactionId = await saveContractTransaction(transaction)
+    }
 
     if (arenaAlreadySent && discordAlreadySent) {
       console.log(`⚠️ Both Arena and Discord posts already sent for transaction: ${transaction.hash}`)
@@ -294,6 +316,12 @@ export async function processTokenCreation(transaction: ContractTransaction): Pr
 
             if (posted) {
               markArenaPostAsSent(arenaPostKey, postType)
+              if (transactionId) {
+                await supabase
+                  .from("contract_transactions")
+                  .update({ posted_to_arena: true })
+                  .eq("id", transactionId)
+              }
               console.log(
                 `🚀 Successfully posted to Arena timeline for @${arenaProfile.username} (${postType.toUpperCase()})`,
               )
@@ -323,6 +351,12 @@ export async function processTokenCreation(transaction: ContractTransaction): Pr
 
             if (discordPosted) {
               markDiscordPostAsSent(discordPostKey, postType)
+              if (transactionId) {
+                await supabase
+                  .from("contract_transactions")
+                  .update({ posted_to_discord: true })
+                  .eq("id", transactionId)
+              }
               console.log(`🎮 Successfully posted to Discord for @${arenaProfile.username}`)
             } else {
               console.log(`⚠️ Failed to post to Discord for @${arenaProfile.username}`)
