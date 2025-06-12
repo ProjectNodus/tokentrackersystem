@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { fetchWithRetry } from "@/lib/arena-socials"
+import { env } from "@/lib/env"
 
 // Helper function to get ordinal numbers (1st, 2nd, 3rd, etc.)
 function getOrdinalNumber(num: number): string {
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
     }
 
     // Check if we have the bearer token
-    if (!process.env.ARENA_BEARER_TOKEN) {
+    if (!env.ARENA_BEARER_TOKEN) {
       console.error("❌ ARENA_BEARER_TOKEN not found in environment variables")
       return NextResponse.json({ success: false, error: "ARENA_BEARER_TOKEN not configured" }, { status: 500 })
     }
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.ARENA_BEARER_TOKEN}`,
+          Authorization: `Bearer ${env.ARENA_BEARER_TOKEN}`,
           "Content-Type": "application/json",
           Origin: "https://arena.social",
           "User-Agent":

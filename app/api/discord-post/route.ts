@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { env } from "@/lib/env"
 
 // Helper function to format AVAX amount
 function formatAvax(amount: number): string {
@@ -67,16 +68,16 @@ function formatAvaxValue(value: string): string {
 
 // Helper function to determine which Discord channel to use
 function getDiscordWebhookUrl(isChampion: boolean, isHeavyHitter: boolean): string | null {
-  if (isChampion && process.env.DISCORD_WEBHOOK_CHAMPIONS) {
-    return process.env.DISCORD_WEBHOOK_CHAMPIONS
+  if (isChampion && env.DISCORD_WEBHOOK_CHAMPIONS) {
+    return env.DISCORD_WEBHOOK_CHAMPIONS
   }
 
-  if (isHeavyHitter && process.env.DISCORD_WEBHOOK_HEAVY_HITTERS) {
-    return process.env.DISCORD_WEBHOOK_HEAVY_HITTERS
+  if (isHeavyHitter && env.DISCORD_WEBHOOK_HEAVY_HITTERS) {
+    return env.DISCORD_WEBHOOK_HEAVY_HITTERS
   }
 
-  if (process.env.DISCORD_WEBHOOK_GENERAL) {
-    return process.env.DISCORD_WEBHOOK_GENERAL
+  if (env.DISCORD_WEBHOOK_GENERAL) {
+    return env.DISCORD_WEBHOOK_GENERAL
   }
 
   return null
@@ -191,15 +192,15 @@ export async function POST(request: Request) {
 
     // Determine channel based on user status
     if (isChampion) {
-      webhookUrl = process.env.DISCORD_WEBHOOK_CHAMPIONS
+      webhookUrl = env.DISCORD_WEBHOOK_CHAMPIONS
       embedColor = 0xffd700 // Gold color for champions
       title = `🏆 CHAMPION ALERT: @${username} created $${tokenSymbol}`
     } else if (followerCount >= 5000 || ticketPrice >= 1.5) {
-      webhookUrl = process.env.DISCORD_WEBHOOK_HEAVY_HITTERS
+      webhookUrl = env.DISCORD_WEBHOOK_HEAVY_HITTERS
       embedColor = 0xff4500 // Orange-red for heavy hitters
       title = `🚀 HEAVY HITTER: @${username} created $${tokenSymbol}`
     } else {
-      webhookUrl = process.env.DISCORD_WEBHOOK_GENERAL
+      webhookUrl = env.DISCORD_WEBHOOK_GENERAL
       embedColor = 0x3498db // Blue for regular posts
       title = `⚠️ NEW TOKEN: @${username} created $${tokenSymbol}`
     }
@@ -283,9 +284,9 @@ export async function POST(request: Request) {
 
     // Determine which channel was used
     let channelType = "unknown"
-    if (webhookUrl === process.env.DISCORD_WEBHOOK_CHAMPIONS) channelType = "champions"
-    else if (webhookUrl === process.env.DISCORD_WEBHOOK_HEAVY_HITTERS) channelType = "heavy-hitters"
-    else if (webhookUrl === process.env.DISCORD_WEBHOOK_GENERAL) channelType = "general"
+    if (webhookUrl === env.DISCORD_WEBHOOK_CHAMPIONS) channelType = "champions"
+    else if (webhookUrl === env.DISCORD_WEBHOOK_HEAVY_HITTERS) channelType = "heavy-hitters"
+    else if (webhookUrl === env.DISCORD_WEBHOOK_GENERAL) channelType = "general"
 
     console.log(`✅ Discord post sent to ${channelType} channel for @${username}`)
     return NextResponse.json({ success: true, channel: channelType })
