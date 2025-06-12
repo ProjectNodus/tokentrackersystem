@@ -247,7 +247,7 @@ async function fetchCreatorProfile(address: string): Promise<CreatorProfile> {
 }
 
 // Functie om transactie type te bepalen op basis van method ID en value
-function determineTransactionType(
+export function determineTransactionType(
   methodId: string,
   value: string,
 ): {
