@@ -1,0 +1,3 @@
+ALTER TABLE contract_transactions
+  ADD COLUMN IF NOT EXISTS posted_to_arena BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS posted_to_discord BOOLEAN DEFAULT FALSE;

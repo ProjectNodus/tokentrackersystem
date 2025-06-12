@@ -167,6 +167,8 @@ export interface Database {
           token_id: string | null
           creator_profile_id: string | null
           raw_input: string | null
+          posted_to_arena: boolean | null
+          posted_to_discord: boolean | null
           created_at: string
         }
         Insert: {
@@ -187,6 +189,8 @@ export interface Database {
           token_id?: string | null
           creator_profile_id?: string | null
           raw_input?: string | null
+          posted_to_arena?: boolean | null
+          posted_to_discord?: boolean | null
           created_at?: string
         }
         Update: {
@@ -207,6 +211,8 @@ export interface Database {
           token_id?: string | null
           creator_profile_id?: string | null
           raw_input?: string | null
+          posted_to_arena?: boolean | null
+          posted_to_discord?: boolean | null
           created_at?: string
         }
       }
